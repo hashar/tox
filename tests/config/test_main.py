@@ -109,6 +109,44 @@ def test_config_override_cannot_append(tox_ini_conf: ToxIniCreator) -> None:
         conf["foo"]
 
 
+def test_config_override_override_from_prefix(tox_ini_conf: ToxIniCreator) -> None:
+    example = """
+    [testenv]
+    set_env =
+        WHERE=top
+        other=1
+    [testenv:test]
+    set_env =
+        WHERE=test
+        other=1
+    """
+    conf = tox_ini_conf(example, override=[Override("testenv.set_env=WHERE=cli")])
+
+    assert conf.get_env("testenv")["set_env"].load("WHERE") == "cli"
+    assert conf.get_env("testenv:test")["set_env"].load("WHERE") == "cli"
+
+    with pytest.raises(KeyError, match="other"):
+        conf.get_env("testenv")["set_env"].load("other")
+    with pytest.raises(KeyError, match="other"):
+        conf.get_env("testenv:test")["set_env"].load("other")
+
+
+def test_config_override_appends_from_prefix(tox_ini_conf: ToxIniCreator) -> None:
+    example = """
+    [testenv]
+    set_env = WHERE=top
+    [testenv:test]
+    set_env = WHERE=test
+    """
+    conf = tox_ini_conf(example, override=[Override("testenv.set_env+=CLI_ARG=1")])
+
+    assert conf.get_env("testenv")["set_env"].load("WHERE") == "top"
+    assert conf.get_env("testenv")["set_env"].load("CLI_ARG") == "1"
+
+    assert conf.get_env("test")["set_env"].load("WHERE") == "test"
+    assert conf.get_env("test")["set_env"].load("CLI_ARG") == "1"
+
+
 def test_args_are_paths_when_disabled(tox_project: ToxProjectCreator) -> None:
     ini = "[testenv]\npackage=skip\ncommands={posargs}\nargs_are_paths=False"
     project = tox_project({"tox.ini": ini, "w": {"a.txt": "a"}})
